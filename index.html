@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Editorea</title>
+
+    <!-- Pannellum core styles -->
+    <link rel="stylesheet" href="libs/pannellum.css" />
+    <!-- App‑specific styles (ported de style.css/app.css originales) -->
+    <link rel="stylesheet" href="js/app.css" />
+  </head>
+  <body class="dark:text-white bg-gray-900 text-gray-100">
+    <!-- ───────────────────────── TOP BAR ────────────────────────── -->
+    <header
+      id="top-bar"
+      class="flex items-center justify-between px-4 py-2 shadow-md bg-gray-800/90 backdrop-blur"
+    >
+      <div class="flex items-center gap-2">
+        <h1 class="font-semibold text-lg select-none">
+          Pannellum Editorea
+        </h1>
+      </div>
+
+      <nav class="flex items-center gap-2 text-sm font-medium">
+        <button id="newProjectBtn" class="btn">Nuevo</button>
+
+        <!-- "Abrir" usa un <input type=file> oculto para cargar JSON -->
+        <label for="openFileInput" class="btn cursor-pointer">Abrir</label>
+        <input
+          type="file"
+          id="openFileInput"
+          accept="application/json"
+          class="hidden"
+        />
+
+        <button id="saveProjectBtn" class="btn">Guardar</button>
+        <button id="exportProjectBtn" class="btn">Exportar</button>
+      </nav>
+    </header>
+
+    <!-- ───────────────────────── MAIN LAYOUT ────────────────────── -->
+    <main id="main">
+      <!-- Lista de escenas (rellenada dinámicamente) -->
+      <aside
+        id="sceneList"
+        class="w-64 max-w-[50vw] overflow-y-auto border-r border-gray-700 bg-gray-850/80 backdrop-blur-lg hidden md:block"
+      ></aside>
+
+      <input type="file" id="addSceneInput" accept="image/*" multiple class="hidden">
+
+      <!-- Contenedor Pannellum -->
+      <section id="panorama" class="flex-1 relative"></section>
+
+      <div id="hotspotToolbar">
+        <button id="addLinkBtn" class="btn icon-link">Añadir enlace</button>
+        <button id="addInfoBtn" class="btn icon-info">Añadir info</button>
+      </div>
+    </main>
+
+    <!-- Dialogs / modals se inyectarán aquí mediante JS -->
+
+    <!-- ───────────────────────── SCRIPTS ────────────────────────── -->
+    <script src="libs/pannellum.js"></script>
+    <script src="libs/FileSaver.min.js"></script>
+    <!-- El editor/principal -->
+    <script type="module" src="js/app.js"></script>
+    <!-- El visor standalone reutilizará este mismo HTML pero con viewer.js -->
+  </body>
+</html>

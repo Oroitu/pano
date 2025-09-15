@@ -1,0 +1,15 @@
+chrome.png
+export-failed.svg
+export-started.svg
+export-successful.svg
+eye-inner.svg
+eye-outer.svg
+firefox.png
+help-left.svg
+help-top.svg
+hotspot.png
+info.png
+lista.txt
+marzipano-dark.png
+marzipano-light.png
+webgl.png

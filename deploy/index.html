@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Tour Pannellum</title>
+
+    <!-- Pannellum core -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+
+    <!-- Tailwind (solo para estilos de la lista de escenas) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      html,body,#panorama{height:100%;margin:0}
+      /* contenedor lista escenas */
+      #sceneList{position:fixed;top:1rem;left:1rem;z-index:50;
+                  display:flex;flex-direction:column;gap:.25rem}
+    </style>
+  </head>
+  <body class="bg-neutral-900 text-white">
+    <div id="panorama"></div>
+    <div id="sceneList"></div>
+
+    <!-- Librería Pannellum -->
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+
+    <!-- viewer.js embebido -->
+    <script>
+/**
+ * Pannellum Tour Viewer
+ * ---------------------
+ * Scrip sencillo para reproducir un tour exportado con el builder.
+ *
+ * Cómo funciona:
+ *   ▸ Por defecto intenta cargar `tour.json` (mismo directorio).
+ *   ▸ Se puede indicar ?file=URL para un JSON externo.
+ *   ▸ También hay un botón "Abrir" (<input type=file>) para cargar localmente.
+ *
+ * No incluye funciones de edición; solo navegación entre escenas y hotspots.
+ * Dependencias: pannellum.js + CSS ya incluidos en index.html.
+ * © 2025 
+GPL‑3.0
+ */
+
+// ──────────────────────────── ELEMENTOS DOM ─────────────────────── //
+
+const dom = {
+  panorama: /** @type {HTMLDivElement} */ (document.getElementById('panorama')),
+  sceneList: /** @type {HTMLDivElement} */ (document.getElementById('sceneList')),
+};
+
+let viewer = null;
+let tour = null; // datos JSON
+
+// ──────────────────────────── CARGA DEL TOUR ────────────────────── //
+
+async function fetchTour() {
+  const search = new URLSearchParams(location.search);
+  const src = search.get('file') || 'tour.json';
+
+  try {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error(res.statusText);
+    tour = await res.json();
+    initViewer();
+  } catch (err) {
+    console.error('Error cargando el tour:', err);
+    showError('No se pudo cargar el tour');
+  }
+}
+
+function showError(msg) {
+  const div = document.createElement('div');
+  div.textContent = msg;
+  div.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;background:#d00;padding:1rem;border-radius:.5rem';
+  document.body.appendChild(div);
+}
+
+function initViewer() {
+  viewer = pannellum.viewer('panorama', {
+    default: {
+      author: tour.author || '',
+      firstScene: tour.firstScene || Object.keys(tour.scenes)[0],
+      sceneFadeDuration: 1000,
+      autoLoad: true,
+    },
+    scenes: tour.scenes,
+  });
+
+  renderSceneList();
+}
+
+function renderSceneList() {
+  dom.sceneList.innerHTML = '';
+  Object.entries(tour.scenes).forEach(([id, scene]) => {
+    const btn = document.createElement('button');
+    btn.className = 'flex items-center gap-2 w-full text-left px-3 py-2 hover:bg-gray-700 focus:bg-gray-700';
+
+    if (scene.thumbUrl) {
+      const img = document.createElement('img');
+      img.src = scene.thumbUrl;
+      img.alt = scene.title || id;
+      img.className = 'h-8 w-8 object-cover rounded';
+      btn.appendChild(img);
+    }
+
+    const span = document.createElement('span');
+    span.textContent = scene.title || id;
+    btn.appendChild(span);
+
+    btn.addEventListener('click', () => viewer.loadScene(id));
+    dom.sceneList.appendChild(btn);
+  });
+}
+
+// ──────────────────────────── INICIO ───────────────────────────── //
+
+document.addEventListener('DOMContentLoaded', fetchTour);
+    </script>
+  </body>
+</html>

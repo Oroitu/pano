@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bisita Birtuala 360°</title>
+  <style>
+    /* ---------- Design Tokens (Dark) ---------- */
+    :root{
+      --bg: #0b0f14;
+      --panel: #0f141a;
+      --panel-2: #111821;
+      --elev: rgba(255,255,255,.04);
+      --text: #d8dee6;
+      --accent: #68b0ff;
+      --outline: rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.45);
+      --radius: 16px;
+    }
+
+    *{ box-sizing:border-box }
+    html,body{ height:100%; margin:0; padding:0; overflow:hidden }
+    body{
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color:var(--text);
+      background: var(--bg);
+    }
+
+    /* Panorama full-screen */
+    .pano{
+      position:fixed; inset:0;
+      background-repeat: repeat-x;
+      background-position: 0px 50%;
+      background-size: auto 110%; /* zoom=1 baseline */
+      transition: background-size .15s ease-out;
+    }
+
+    /* Sidebar overlay */
+    aside{
+      position:fixed; top:24px; left:24px;
+      width:280px;
+      background: rgba(16, 20, 26, 0.7); /* semi-transparent for background show-through */
+      border:1px solid var(--outline);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:18px;
+      display:flex; flex-direction:column;
+      z-index:10;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px; margin-bottom:8px;
+      border-radius:12px;
+      user-select:none;
+      background: rgba(16, 20, 26, 0.85);
+    }
+    .brand-logo{
+      width:28px; height:28px; border-radius:8px;
+      background: conic-gradient(from 180deg, #1e2936, #0b1826);
+      display:grid; place-items:center;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+      color:#9ed0ff; font-weight:700;
+    }
+    .brand h1{ margin:0; font-size:18px; letter-spacing:.2px; font-weight:700; }
+    .brand small{ color:var(--text); font-weight:600; }
+    nav{
+      margin-top:10px;
+      overflow:auto;
+      background: rgba(16, 20, 26, 0.5); /* transparent scene list */
+      border-radius:12px;
+      padding:8px;
+    }
+    .room{
+      width:100%; appearance:none; border:0; background:transparent; color:inherit;
+      display:flex; align-items:center; gap:12px; padding:10px;
+      border-radius:12px; cursor:pointer;
+      outline:none;
+      transition: background .2s;
+    }
+    .room:hover{ background:var(--elev) }
+    .room[aria-current="page"]{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .thumb{
+      width:40px; height:40px;
+      border-radius:50%;
+      background-size:cover;
+      background-position:center;
+      flex-shrink:0;
+      border:1px solid var(--outline);
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    }
+
+    /* HUD bottom label overlay */
+    .hud-bottom{
+      position:fixed; left:24px; bottom:24px;
+      background: rgba(20,26,34,.55);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 12px;
+      padding:8px 12px;
+      display:flex; align-items:center; gap:12px;
+      font-size:13px; color: #c9d3de;
+      z-index:10;
+    }
+    .dot{
+      width:6px; height:6px; border-radius:50%;
+      background: var(--accent); box-shadow: 0 0 0 4px rgba(104,176,255,.12);
+    }
+
+    /* Controls overlay */
+    .controls{
+      position:fixed; right:24px; bottom:24px;
+      display:flex; flex-direction:column; gap:10px;
+      z-index:10;
+    }
+    .ctrl{
+      width:42px; height:42px; border-radius:12px;
+      background: rgba(20,26,34,.65);
+      border:1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      display:grid; place-items:center;
+      cursor:pointer; user-select:none;
+      transition: transform .06s ease;
+    }
+    .ctrl:active{ transform: scale(.96) }
+    .ctrl svg{ width:18px; height:18px; }
+    .ctrl[disabled]{ opacity:.5; pointer-events:none }
+    .fullscreen{ position:fixed; top:24px; left:97vw; z-index:10; }
+
+    /* Tooltips */
+    [data-tip]{ position:relative; }
+    [data-tip]::after{
+      content: attr(data-tip);
+      position:absolute; right:110%; top:50%; transform:translateY(-50%);
+      background:#0b1117; color:#cbd5e1; font-size:12px;
+      padding:6px 8px; border-radius:8px;
+      border:1px solid rgba(255,255,255,.08);
+      white-space:nowrap; opacity:0; pointer-events:none; transition:.12s;
+    }
+    [data-tip]:hover::after{ opacity:1 }
+  </style>
+</head>
+<body>
+  <!-- Panorama -->
+  <div class="pano" id="pano" role="img" aria-label="Panorama actual"></div>
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="brand" aria-label="VisitaTour 360 grados">
+      <div class="brand-logo">VT</div>
+      <div><h1>Bisita Birtuala <small>360°</small></h1></div>
+    </div>
+    <nav id="roomsNav" aria-label="Estancias"></nav>
+  </aside>
+
+  <!-- Label -->
+  <div class="hud-bottom" id="label">
+    <span class="dot"></span>
+    <span id="roomLabel">Espacio 01</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="ctrl" id="zoomIn" data-tip="Acercar (+)" aria-label="Acercar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="ctrl" id="zoomOut" data-tip="Alejar (−)" aria-label="Alejar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" d="M5 12h14"/></svg>
+    </button>
+  </div>
+  <button class="ctrl fullscreen" id="btnFS" data-tip="Pantalla completa (F)" aria-label="Pantalla completa">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="1.8" d="M8 3H4a1 1 0 0 0-1 1v4m0 8v4a1 1 0 0 0 1 1h4m8-18h4a1 1 0 0 1 1 1v4m0 8v4a1 1 0 0 1-1 1h-4"/></svg>
+  </button>
+
+  <script>
+    const ROOMS=[
+      {
+        key:'01',
+        name:'Espacio 01',
+        image:'url(https://www.espiralpatrimonio.com/wp-content/uploads/2020/01/Aulario_IAAP_1.jpg)',
+        thumb:'https://www.espiralpatrimonio.com/wp-content/uploads/2020/01/Aulario_IAAP_1.jpg'
+      },
+      {
+        key:'02',
+        name:'Espacio 02',
+        image:'conic-gradient(from 180deg at 50% 50%, #111c25, #0c141c, #111c25)',
+        thumb:'https://via.placeholder.com/80?text=Kitchen'
+      },
+      {
+        key:'03',
+        name:'Espacio 03',
+        image:'linear-gradient(180deg, #0f1520, #0a1016), radial-gradient(900px 600px at 60% 40%, #18212b 0%, transparent 60%)',
+        thumb:'https://via.placeholder.com/80?text=Bedroom'
+      },
+      {
+        key:'04',
+        name:'Espacio 04',
+        image:'linear-gradient(180deg, #0c141b, #0a0f14), radial-gradient(700px 500px at 30% 40%, #19222c 0%, transparent 60%)',
+        thumb:'https://via.placeholder.com/80?text=Bathroom'
+      }
+    ];
+
+    const $=s=>document.querySelector(s), nav=$('#roomsNav'), pano=$('#pano'), label=$('#roomLabel');
+    let yaw=0, pitch=50, zoom=1.1;
+    const ZS=[1,2.6,0.12];
+
+    function apply(){
+      pano.style.backgroundImage=currentRoom.image;
+      pano.style.backgroundPosition=`${yaw}px ${pitch}%`;
+      pano.style.backgroundSize=`auto ${Math.round(zoom*100)}%`;
+    }
+
+    let currentRoom;
+    function selectRoom(key){
+      currentRoom=ROOMS.find(r=>r.key===key)||ROOMS[0];
+      localStorage.setItem('vt_room',key);
+      nav.querySelectorAll('.room').forEach(b=>b.toggleAttribute('aria-current',b.dataset.key===key));
+      label.textContent=currentRoom.name;
+      // reset view
+      yaw=0; pitch=50; zoom=1.1;
+      apply();
+    }
+
+    // Build scene list
+    ROOMS.forEach(r=>{
+      const btn=document.createElement('button');
+      btn.className='room';
+      btn.dataset.key=r.key;
+      btn.innerHTML=
+        `<div class="thumb" style="background-image:url('${r.thumb}')"></div>`+
+        `<span>${r.name}</span>`;
+      btn.addEventListener('click',()=>selectRoom(r.key));
+      nav.appendChild(btn);
+    });
+
+    // Init
+    const saved=localStorage.getItem('vt_room')||ROOMS[0].key;
+    selectRoom(saved);
+
+    // Drag to pan
+    pano.addEventListener('pointerdown',e=>{ pano.setPointerCapture(e.pointerId); pano.dataset.dragging=true; pano.dataset.lx=e.clientX; pano.dataset.ly=e.clientY; });
+    pano.addEventListener('pointermove',e=>{
+      if(pano.dataset.dragging!=='true')return;
+      const dx=e.clientX-parseFloat(pano.dataset.lx), dy=e.clientY-parseFloat(pano.dataset.ly);
+      yaw-=dx; pitch=Math.max(5,Math.min(95,pitch+dy*0.05));
+      pano.dataset.lx=e.clientX; pano.dataset.ly=e.clientY;
+      apply();
+    });
+    pano.addEventListener('pointerup',e=>{ pano.dataset.dragging=false; pano.releasePointerCapture(e.pointerId); });
+
+    // Zoom via buttons
+    document.getElementById('zoomIn').onclick=_=>{ zoom=Math.min(ZS[1],zoom+ZS[2]); apply(); };
+    document.getElementById('zoomOut').onclick=_=>{ zoom=Math.max(ZS[0],zoom-ZS[2]); apply(); };
+
+    // Fullscreen
+    document.getElementById('btnFS').onclick=_=>{
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
+
+    // Wheel zoom
+    pano.addEventListener('wheel',e=>{
+      e.preventDefault(); const d=Math.sign(e.deltaY);
+      zoom=Math.max(ZS[0],Math.min(ZS[1],zoom-d*ZS[2])); apply();
+    },{passive:false});
+
+    // Keyboard controls
+    window.addEventListener('keydown',e=>{
+      if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+      switch(e.key){
+        case '+': case '=': zoom=Math.min(ZS[1],zoom+ZS[2]); apply(); break;
+        case '-': case '−': zoom=Math.max(ZS[0],zoom-ZS[2]); apply(); break;
+        case 'ArrowLeft': yaw+=30; apply(); break;
+        case 'ArrowRight': yaw-=30; apply(); break;
+        case 'ArrowUp': pitch=Math.max(5,pitch-2); apply(); break;
+        case 'ArrowDown': pitch=Math.min(95,pitch+2); apply(); break;
+        case 'f': case 'F': if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); break;
+      }
+    });
+
+  </script>
+</body>
+</html>
