@@ -213,7 +213,18 @@ const dom = {
   addLinkBtn:  document.getElementById('addLinkBtn'),
   addInfoBtn:  document.getElementById('addInfoBtn'),
   hotspotToolbar: document.getElementById('hotspotToolbar'),
+  hotspotEditToggle: /** @type {HTMLInputElement} */ (document.getElementById('hotspotEditToggle')),
 };
+
+dom.hotspotEditToggle.addEventListener('change', () => {
+  if (!viewer) return;
+  if (dom.hotspotEditToggle.checked) {
+    attachHotspotEditors();
+  } else {
+    const sceneId = viewer.getScene();
+    viewer.loadScene(sceneId, viewer.getPitch(), viewer.getYaw(), viewer.getHfov());
+  }
+});
 
 function closeHotspotMenu() {
   if (!activeHotspotMenu) return;
@@ -277,12 +288,12 @@ function buildViewer() {
   dblClickHandler = handleViewerDoubleClick;
   dom.panorama.addEventListener('dblclick', dblClickHandler);
 
-  // cuando se cambie de escena volvemos a habilitar drag / editar
+  // cuando se cambie de escena desactivamos la edición
   viewer.on('scenechange', () => {
     closeHotspotMenu();
-    attachHotspotEditors();
+    dom.hotspotEditToggle.checked = false;
   });
-  attachHotspotEditors(); // para la primera escena
+  if (dom.hotspotEditToggle.checked) attachHotspotEditors();
 }
 
 /* ─────────────────────────── HOTSPOT DRAG & EDIT ───────────────────────── */
@@ -323,6 +334,7 @@ function enableDrag(div, hotspot, sceneId) {
 }
 
 function attachHotspotEditors() {
+  if (!dom.hotspotEditToggle.checked) return;
   const sceneId = viewer.getScene();
   const scene = project.scenes[sceneId];
   if (!scene?.hotSpots) return;
@@ -373,7 +385,7 @@ function addHotspot(sceneId, hotspot) {
 
 /* doble‑clic dentro visor */
 function handleViewerDoubleClick(e) {
-  if (!viewer) return;
+  if (!viewer || !dom.hotspotEditToggle.checked) return;
   const coords = viewer.mouseEventToCoords(e);
   if (!coords) return;
   const [pitch, yaw] = coords;
@@ -546,7 +558,7 @@ function startPlacement(placeFn) {
 }
 
 dom.addLinkBtn.addEventListener('click', () => {
-  if (!viewer) return;
+  if (!viewer || !dom.hotspotEditToggle.checked) return;
   const scenes = Object.entries(project.scenes);
   if (scenes.length === 0) return alert('No hay escenas disponibles');
   const menu = document.createElement('select');
@@ -583,7 +595,7 @@ dom.addLinkBtn.addEventListener('click', () => {
 });
 
 dom.addInfoBtn.addEventListener('click', () => {
-  if (!viewer) return;
+  if (!viewer || !dom.hotspotEditToggle.checked) return;
   const infoText = prompt('Texto informativo:');
   if (!infoText) return;
   startPlacement(([pitch, yaw]) => {
