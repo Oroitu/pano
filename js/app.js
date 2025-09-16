@@ -329,7 +329,8 @@ function enableDrag(div, hotspot, sceneId) {
   // Context‑menu para editar JSON del hotspot
   div.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    editHotspot(hotspot, sceneId);
+    e.stopPropagation();
+    editHotspot(hotspot, sceneId, e);
   });
 }
 
@@ -343,29 +344,125 @@ function attachHotspotEditors() {
   });
 }
 
-function editHotspot(hs, sceneId) {
-  const action = prompt('Acción del hotspot:\n"editar" – modificar JSON\n"eliminar" – quitar del tour', 'editar');
-  if (!action) return;
-  if (action.toLowerCase().startsWith('elim')) {
-    const scene = project.scenes[sceneId];
-    scene.hotSpots = (scene.hotSpots || []).filter((h) => h.id !== hs.id);
-    viewer.removeHotSpot(hs.id, sceneId);
-    scheduleAutoSave();
-    viewer.loadScene(sceneId, viewer.getPitch(), viewer.getYaw(), viewer.getHfov());
-    return;
-  }
+function editHotspot(hs, sceneId, event) {
+  closeHotspotMenu();
 
-  const json = prompt('Edita las propiedades JSON del hotspot:', JSON.stringify(hs, null, 2));
-  if (!json) return;
-  try {
-    Object.assign(hs, JSON.parse(json));
-    viewer.removeHotSpot(hs.id, sceneId);
-    viewer.addHotSpot(hs, sceneId);
-    attachHotspotEditors();
+  const menu = document.createElement('div');
+  menu.id = 'hotspotMenu';
+
+  const content = document.createElement('div');
+  content.className = 'hotspot-menu-content';
+  menu.appendChild(content);
+
+  const handleDelete = () => {
+    const scene = project.scenes[sceneId];
+    if (!scene?.hotSpots) {
+      closeHotspotMenu();
+      return;
+    }
+    const targetId = hs.id;
+    scene.hotSpots = scene.hotSpots.filter((h) => h.id !== targetId);
+    viewer.removeHotSpot(targetId, sceneId);
     scheduleAutoSave();
-  } catch {
-    alert('JSON inválido');
-  }
+    closeHotspotMenu();
+  };
+
+  const showEditForm = () => {
+    content.innerHTML = '';
+    const form = document.createElement('div');
+    form.className = 'hotspot-menu-form';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'hotspot-menu-text';
+    textarea.value = JSON.stringify(hs, null, 2);
+    textarea.spellcheck = false;
+    form.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'hotspot-menu-actions';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = 'Confirmar';
+    confirmBtn.className = 'hotspot-menu-button hotspot-menu-confirm';
+    confirmBtn.addEventListener('click', () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(textarea.value);
+      } catch {
+        alert('JSON inválido');
+        textarea.focus();
+        return;
+      }
+
+      const previousId = hs.id;
+      Object.assign(hs, parsed);
+      viewer.removeHotSpot(previousId, sceneId);
+      viewer.addHotSpot(hs, sceneId);
+      attachHotspotEditors();
+      scheduleAutoSave();
+      closeHotspotMenu();
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.className = 'hotspot-menu-button';
+    cancelBtn.addEventListener('click', () => {
+      showMainOptions();
+    });
+
+    actions.append(confirmBtn, cancelBtn);
+    form.appendChild(actions);
+    content.appendChild(form);
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  };
+
+  const showMainOptions = () => {
+    content.innerHTML = '';
+    const actions = document.createElement('div');
+    actions.className = 'hotspot-menu-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.textContent = 'Editar';
+    editBtn.className = 'hotspot-menu-button';
+    editBtn.addEventListener('click', showEditForm);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.textContent = 'Eliminar';
+    deleteBtn.className = 'hotspot-menu-button';
+    deleteBtn.addEventListener('click', handleDelete);
+
+    actions.append(editBtn, deleteBtn);
+    content.appendChild(actions);
+  };
+
+  showMainOptions();
+  dom.panorama.appendChild(menu);
+
+  const rect = dom.panorama.getBoundingClientRect();
+  let left = event ? event.clientX - rect.left : rect.width / 2 - menu.offsetWidth / 2;
+  let top = event ? event.clientY - rect.top : rect.height / 2 - menu.offsetHeight / 2;
+  const maxLeft = Math.max(0, rect.width - menu.offsetWidth);
+  const maxTop = Math.max(0, rect.height - menu.offsetHeight);
+  left = Math.min(Math.max(left, 0), maxLeft);
+  top = Math.min(Math.max(top, 0), maxTop);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
+  const onOutside = (ev) => {
+    if (!menu.contains(ev.target)) closeHotspotMenu();
+  };
+  const onKeydown = (ev) => {
+    if (ev.key === 'Escape') closeHotspotMenu();
+  };
+
+  activeHotspotMenu = { element: menu, onOutside, onKeydown };
+  document.addEventListener('mousedown', onOutside);
+  document.addEventListener('keydown', onKeydown);
 }
 
 /* ─────────────────────────── CRUD HOTSPOTS ─────────────────────────────── */
