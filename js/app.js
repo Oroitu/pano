@@ -207,7 +207,7 @@ const dom = {
   sceneList: /** @type {HTMLDivElement} */ (document.getElementById('sceneList')),
   addSceneInput: /** @type {HTMLInputElement} */ (document.getElementById('addSceneInput')),
   newBtn:      document.getElementById('newProjectBtn'),
-  openInput:   /** @type {HTMLInputElement} */ (document.getElementById('openFileInput')),
+  openBtn:     document.getElementById('openProjectBtn'),
   saveBtn:     document.getElementById('saveProjectBtn'),
   exportBtn:   document.getElementById('exportProjectBtn'),
   addLinkBtn:  document.getElementById('addLinkBtn'),
@@ -978,29 +978,63 @@ function newProject() {
   scheduleAutoSave();
 }
 
+async function openProject() {
+  const handleFile = async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      await loadProject(JSON.parse(text));
+    } catch {
+      alert('Archivo proyecto inválido');
+    }
+  };
+
+  if (typeof window.showOpenFilePicker === 'function') {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: 'Proyecto JSON',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      if (!handle) return;
+      const file = await handle.getFile();
+      await handleFile(file);
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      console.error('No se pudo abrir el proyecto con showOpenFilePicker', error);
+    }
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json';
+  input.addEventListener(
+    'change',
+    async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      await handleFile(file);
+    },
+    { once: true }
+  );
+  input.click();
+}
+
 /* ─────────────────────────── EVENTOS UI ─────────────────────────────── */
 dom.newBtn.addEventListener('click', newProject);
+dom.openBtn.addEventListener('click', () => {
+  openProject().catch((error) => console.error('No se pudo abrir el proyecto', error));
+});
 dom.saveBtn.addEventListener('click', () => {
   saveProject().catch((error) => console.error('No se pudo guardar el proyecto', error));
 });
 dom.exportBtn.addEventListener('click', () => {
   exportProject().catch((error) => console.error('No se pudo exportar el proyecto', error));
-});
-
-dom.openInput.addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (ev) => {
-    try {
-      await loadProject(JSON.parse(ev.target.result));
-    } catch {
-      alert('Archivo proyecto inválido');
-    } finally {
-      dom.openInput.value = '';
-    }
-  };
-  reader.readAsText(file);
 });
 
 /* ─────────────────────────── INICIO ─────────────────────────────────── */
