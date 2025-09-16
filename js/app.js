@@ -326,12 +326,15 @@ function enableDrag(div, hotspot, sceneId) {
     document.addEventListener('mouseup', onUp);
   });
 
-  // Context‑menu para editar JSON del hotspot
-  div.addEventListener('contextmenu', (e) => {
+  // Doble clic o context‑menu para editar / eliminar el hotspot
+  const openEditor = (e) => {
     e.preventDefault();
     e.stopPropagation();
     editHotspot(hotspot, sceneId, e);
-  });
+  };
+
+  div.addEventListener('contextmenu', openEditor);
+  div.addEventListener('dblclick', openEditor);
 }
 
 function attachHotspotEditors() {
@@ -361,10 +364,15 @@ function editHotspot(hs, sceneId, event) {
       return;
     }
     const targetId = hs.id;
+    if (targetId && hs.div) {
+      try {
+        viewer.removeHotSpot(targetId, sceneId);
+      } catch {}
+    }
     scene.hotSpots = scene.hotSpots.filter((h) => h.id !== targetId);
-    viewer.removeHotSpot(targetId, sceneId);
-    scheduleAutoSave();
+    attachHotspotEditors();
     closeHotspotMenu();
+    scheduleAutoSave();
   };
 
   const showEditForm = () => {
@@ -395,9 +403,12 @@ function editHotspot(hs, sceneId, event) {
         return;
       }
 
-      const previousId = hs.id;
+      if (hs.id && hs.div) {
+        try {
+          viewer.removeHotSpot(hs.id, sceneId);
+        } catch {}
+      }
       Object.assign(hs, parsed);
-      viewer.removeHotSpot(previousId, sceneId);
       viewer.addHotSpot(hs, sceneId);
       attachHotspotEditors();
       scheduleAutoSave();
