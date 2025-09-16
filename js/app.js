@@ -7,6 +7,8 @@
 //   ▸ Autosave en localStorage (cada cambio ≈600 ms)
 // ------------------------------------------------------------
 
+import { initStorage, saveImage, getImage, deleteImage } from './storage.js';
+
 /* ─────────────────────────── UTILIDADES GENERALES ───────────────────────── */
 function nowISO() {
   return new Date().toISOString();
@@ -31,6 +33,9 @@ function createEmptyProject() {
 
 /* ─────────────────────────── ESTADO Y AUTOSAVE ──────────────────────────── */
 const AUTOSAVE_KEY = 'pnl_editorea_autosave';
+const storageReady = initStorage();
+const sceneMedia = new Map();
+
 let project = createEmptyProject();
 const autosaved = localStorage.getItem(AUTOSAVE_KEY);
 if (autosaved) {
@@ -40,6 +45,9 @@ if (autosaved) {
     /* corrupt json – ignore */
   }
 }
+project.meta = { ...createEmptyProject().meta, ...project.meta };
+if (!project.scenes || typeof project.scenes !== 'object') project.scenes = {};
+
 let viewer = /** @type {pannellum.Viewer | null} */ (null);
 let dblClickHandler = null;
 let autoSaveTimer = null;
@@ -48,8 +56,149 @@ function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
     project.meta.updated = nowISO();
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(project));
+    const minimalProject = {
+      ...project,
+      scenes: Object.fromEntries(
+        Object.entries(project.scenes).map(([id, scene]) => [id, normalizeScene(id, scene)])
+      ),
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(minimalProject));
   }, 600);
+}
+
+function normalizeScene(id, scene = {}) {
+  return {
+    id,
+    title: scene?.title || id,
+    yaw: typeof scene?.yaw === 'number' ? scene.yaw : 0,
+    pitch: typeof scene?.pitch === 'number' ? scene.pitch : 0,
+    hfov: typeof scene?.hfov === 'number' ? scene.hfov : 110,
+    hotSpots: Array.isArray(scene?.hotSpots) ? scene.hotSpots : [],
+  };
+}
+
+function setSceneMedia(id, media) {
+  const current = sceneMedia.get(id);
+  if (current?.isObjectUrl && current.objectUrl) {
+    URL.revokeObjectURL(current.objectUrl);
+  }
+  sceneMedia.set(id, media);
+}
+
+function removeSceneMedia(id) {
+  const current = sceneMedia.get(id);
+  if (current?.isObjectUrl && current.objectUrl) {
+    URL.revokeObjectURL(current.objectUrl);
+  }
+  sceneMedia.delete(id);
+}
+
+async function createThumbnailFromBlob(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        const ratio = Math.max(size / img.width, size / img.height);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = () => resolve(null);
+      img.src = /** @type {string} */ (reader.result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function dataURLToBlob(dataUrl) {
+  try {
+    const response = await fetch(dataUrl);
+    return await response.blob();
+  } catch (error) {
+    console.error('No se pudo convertir dataURL a Blob', error);
+    return null;
+  }
+}
+
+async function ensureSceneMedia(id) {
+  const scene = project.scenes[id];
+  if (!scene) return null;
+  const existing = sceneMedia.get(id);
+  if (existing?.objectUrl) return existing;
+
+  await storageReady;
+
+  let blob;
+  try {
+    blob = await getImage(id);
+  } catch (error) {
+    console.error(`Error al leer la imagen de la escena ${id} en IndexedDB`, error);
+  }
+
+  if (!blob && scene?.panoramaData?.startsWith?.('data:')) {
+    blob = await dataURLToBlob(scene.panoramaData);
+    if (blob) {
+      try {
+        await saveImage(id, blob);
+      } catch (error) {
+        console.error(`No se pudo guardar la imagen ${id} en IndexedDB`, error);
+      }
+    }
+  }
+
+  if (!blob && scene?.panorama?.startsWith?.('data:')) {
+    blob = await dataURLToBlob(scene.panorama);
+    if (blob) {
+      try {
+        await saveImage(id, blob);
+      } catch (error) {
+        console.error(`No se pudo guardar la imagen ${id} en IndexedDB`, error);
+      }
+    }
+  }
+
+  if (blob) {
+    const objectUrl = URL.createObjectURL(blob);
+    const thumbUrl = (await createThumbnailFromBlob(blob)) || scene.thumbUrl || null;
+    setSceneMedia(id, { objectUrl, thumbUrl, isObjectUrl: true });
+  } else if (typeof scene?.panorama === 'string') {
+    setSceneMedia(id, { objectUrl: scene.panorama, thumbUrl: scene.thumbUrl || null, isObjectUrl: false });
+  } else {
+    console.warn(`No se encontró imagen para la escena ${id}`);
+    project.scenes[id] = normalizeScene(id, scene);
+    return null;
+  }
+
+  project.scenes[id] = normalizeScene(id, scene);
+  return sceneMedia.get(id);
+}
+
+async function ensureAllSceneMedia() {
+  const ids = Object.keys(project.scenes);
+  for (const id of ids) {
+    await ensureSceneMedia(id);
+  }
+}
+
+async function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(/** @type {string} */ (reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 /* ─────────────────────────── DOM ELEMENTS ──────────────────────────────── */
@@ -82,19 +231,45 @@ function buildViewer() {
     try { viewer.destroy?.(); } catch {}
     dom.panorama.innerHTML = '';
   }
-  if (Object.keys(project.scenes).length === 0) {
+  const sceneEntries = Object.entries(project.scenes);
+  if (sceneEntries.length === 0) {
     viewer = null;
     return;
   }
 
+  const scenesConfig = {};
+  sceneEntries.forEach(([id, scene]) => {
+    const media = sceneMedia.get(id);
+    if (!media?.objectUrl) return;
+    scenesConfig[id] = {
+      title: scene.title,
+      type: 'equirectangular',
+      panorama: media.objectUrl,
+      yaw: scene.yaw,
+      pitch: scene.pitch,
+      hfov: scene.hfov,
+      hotSpots: scene.hotSpots,
+    };
+  });
+
+  const availableIds = Object.keys(scenesConfig);
+  if (availableIds.length === 0) {
+    viewer = null;
+    return;
+  }
+  const firstScene = availableIds.includes(project.startScene)
+    ? project.startScene
+    : availableIds[0];
+  if (project.startScene !== firstScene) project.startScene = firstScene;
+
   // crear visor
   viewer = pannellum.viewer('panorama', {
     default: {
-      firstScene: project.startScene || Object.keys(project.scenes)[0],
+      firstScene,
       author: project.meta.author,
       autoLoad: true,
     },
-    scenes: project.scenes,
+    scenes: scenesConfig,
   });
 
   // editor hotspots – doble click crea
@@ -439,9 +614,10 @@ function renderSceneList() {
     btn.className = 'scene-load flex items-center gap-2 w-full text-left px-3 py-2 hover:bg-gray-700 focus:bg-gray-700';
     btn.dataset.sceneId = id;
 
-    if (scene.thumbUrl) {
+    const media = sceneMedia.get(id);
+    if (media?.thumbUrl) {
       const img = document.createElement('img');
-      img.src = scene.thumbUrl;
+      img.src = media.thumbUrl;
       img.alt = scene.title || id;
       img.className = 'h-8 w-8 object-cover rounded';
       btn.appendChild(img);
@@ -476,6 +652,10 @@ function renderSceneList() {
     delBtn.addEventListener('click', () => {
       if (!confirm('¿Eliminar esta escena?')) return;
       delete project.scenes[id];
+      removeSceneMedia(id);
+      storageReady.then(() => deleteImage(id)).catch((error) => {
+        console.error(`No se pudo eliminar la imagen ${id} de IndexedDB`, error);
+      });
       if (project.startScene === id) {
         project.startScene = Object.keys(project.scenes)[0] || null;
       }
@@ -505,7 +685,9 @@ dom.sceneList.addEventListener('drop', (e) => {
   dom.sceneList.classList.remove('ring', 'ring-indigo-500/50');
   const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
   if (files.length === 0) return alert('Arrastra solo imágenes.');
-  files.forEach(createSceneFromFile);
+  files.forEach((file) => {
+    createSceneFromFile(file).catch((error) => console.error('No se pudo crear la escena', error));
+  });
 });
 
 dom.sceneList.addEventListener('dblclick', () => dom.addSceneInput.click());
@@ -513,62 +695,87 @@ dom.sceneList.addEventListener('dblclick', () => dom.addSceneInput.click());
 dom.addSceneInput.addEventListener('change', (e) => {
   const input = /** @type {HTMLInputElement} */ (e.target);
   const files = [...input.files].filter((f) => f.type.startsWith('image/'));
-  files.forEach(createSceneFromFile);
+  files.forEach((file) => {
+    createSceneFromFile(file).catch((error) => console.error('No se pudo crear la escena', error));
+  });
   input.value = '';
 });
 
-function createSceneFromFile(file) {
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const dataURL = ev.target.result;
-    let base = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '-');
-    let id = base, i = 1;
-    while (project.scenes[id]) id = `${base}-${i++}`;
+async function createSceneFromFile(file) {
+  await storageReady;
+  let base = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '-');
+  if (!base) base = 'escena';
+  let id = base, i = 1;
+  while (project.scenes[id]) id = `${base}-${i++}`;
 
-    const sceneObj = {
-      title: base,
-      type: 'equirectangular',
-      panorama: dataURL,
-      panoramaData: dataURL,
-      yaw: 0,
-      pitch: 0,
-      hfov: 110,
-      hotSpots: [],
-    };
+  const sceneObj = normalizeScene(id, { title: base, hotSpots: [] });
+  project.scenes[id] = sceneObj;
 
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const size = 64;
-      canvas.width = canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const ratio = Math.max(size / img.width, size / img.height);
-      const w = img.width * ratio;
-      const h = img.height * ratio;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      sceneObj.thumbUrl = canvas.toDataURL('image/jpeg', 0.6);
-      renderSceneList();
-    };
-    img.src = dataURL;
+  try {
+    await saveImage(id, file);
+  } catch (error) {
+    console.error(`No se pudo guardar la imagen ${id} en IndexedDB`, error);
+  }
 
-    project.scenes[id] = sceneObj;
-    if (!project.startScene) project.startScene = id;
-    buildViewer();
-    renderSceneList();
-    scheduleAutoSave();
-  };
-  reader.readAsDataURL(file);
+  let thumbUrl = null;
+  try {
+    thumbUrl = await createThumbnailFromBlob(file);
+  } catch (error) {
+    console.error('No se pudo generar la miniatura', error);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  setSceneMedia(id, { objectUrl, thumbUrl, isObjectUrl: true });
+
+  if (!project.startScene) project.startScene = id;
+  buildViewer();
+  renderSceneList();
+  scheduleAutoSave();
 }
 
 /* ─────────────────────────── GUARDAR / CARGAR / EXPORTAR ──────────────── */
-function saveProject() {
+async function saveProject() {
   project.meta.updated = nowISO();
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+  await storageReady;
+  const scenes = {};
+  for (const [id, scene] of Object.entries(project.scenes)) {
+    const exportScene = { ...scene, type: 'equirectangular' };
+    let dataUrl = null;
+    try {
+      const blob = await getImage(id);
+      if (blob) dataUrl = await blobToDataURL(blob);
+    } catch (error) {
+      console.error(`No se pudo obtener la imagen ${id} para guardar`, error);
+    }
+    const media = sceneMedia.get(id);
+    if (dataUrl) {
+      exportScene.panorama = dataUrl;
+      exportScene.panoramaData = dataUrl;
+    } else if (media?.objectUrl && media.isObjectUrl === false) {
+      exportScene.panorama = media.objectUrl;
+    }
+    if (media?.thumbUrl) exportScene.thumbUrl = media.thumbUrl;
+    scenes[id] = exportScene;
+  }
+  const exportProject = { ...project, scenes };
+  const blob = new Blob([JSON.stringify(exportProject, null, 2)], { type: 'application/json' });
   saveAs(blob, (project.meta.title || 'tour') + '.json');
 }
 
-function loadProject(json) {
-  project = json;
+async function loadProject(json) {
+  const previousIds = Object.keys(project.scenes);
+  previousIds.forEach((id) => removeSceneMedia(id));
+  await storageReady;
+  await Promise.all(previousIds.map((id) => deleteImage(id).catch(() => {})));
+
+  project = {
+    ...createEmptyProject(),
+    ...json,
+    meta: { ...createEmptyProject().meta, ...json.meta },
+    scenes: { ...(json.scenes || {}) },
+  };
+
+  await ensureAllSceneMedia();
   buildViewer();
   renderSceneList();
   scheduleAutoSave();
@@ -585,6 +792,8 @@ async function exportProject () {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js');
   }
 
+  await storageReady;
+
   const zip = new JSZip();
 
   // ─────────── 1. index.html (visor) ─────────
@@ -593,32 +802,33 @@ async function exportProject () {
   zip.file('index.html', indexHtml);
 
   // ─────────── 2. tour.json ──────────────────
-  //   • Clonamos el proyecto para no mutar el original
-  //   • Sustituimos cada panoramaData por images/ID.jpg
-  const exportTour = JSON.parse(JSON.stringify(project));
-
-  Object.entries(exportTour.scenes).forEach(([id, scene]) => {
-    scene.panorama = `images/${id}.jpg`; // nueva ruta relativa
-    delete scene.panoramaData;           // limpiamos base64
+  const tourScenes = {};
+  Object.entries(project.scenes).forEach(([id, scene]) => {
+    tourScenes[id] = {
+      ...scene,
+      type: 'equirectangular',
+      panorama: `images/${id}.jpg`,
+    };
   });
-
+  const exportTour = { ...project, scenes: tourScenes };
   zip.file('tour.json', JSON.stringify(exportTour, null, 2));
 
   // ─────────── 3. Imágenes ──────────────────
   const imgFolder = zip.folder('images');
 
   await Promise.all(
-    Object.entries(project.scenes).map(async ([id, scene]) => {
-      // panoramaData viene como dataURL base64
-      if (scene.panoramaData?.startsWith('data:')) {
-        imgFolder.file(
-          `${id}.jpg`,
-          scene.panoramaData.split(',')[1], // quitamos encabezado dataURL
-          { base64: true }
-        );
-      } else {
-        // Si ya es URL externa / local, la saltamos (o podrías fetch + blob si lo necesitas)
-        console.warn(`Escena ${id} no contiene panoramaData, se omite en el ZIP`);
+    Object.keys(project.scenes).map(async (id) => {
+      try {
+        const blob = await getImage(id);
+        if (!blob) {
+          console.warn(`Escena ${id} no contiene imagen en IndexedDB, se omite en el ZIP`);
+          return;
+        }
+        const dataUrl = await blobToDataURL(blob);
+        const base64 = dataUrl.split(',')[1];
+        imgFolder.file(`${id}.jpg`, base64, { base64: true });
+      } catch (error) {
+        console.error(`No se pudo exportar la imagen ${id}`, error);
       }
     })
   );
@@ -641,6 +851,11 @@ function loadScript (src) {
 /* ─────────────────────────── NUEVO PROYECTO ─────────────────────────── */
 function newProject() {
   if (!confirm('¿Descartar el proyecto actual y empezar uno nuevo?')) return;
+  const previousIds = Object.keys(project.scenes);
+  previousIds.forEach((id) => removeSceneMedia(id));
+  storageReady
+    .then(() => Promise.all(previousIds.map((id) => deleteImage(id).catch(() => {}))))
+    .catch((error) => console.error('No se pudieron limpiar las imágenes del proyecto', error));
   project = createEmptyProject();
   buildViewer();
   renderSceneList();
@@ -649,16 +864,20 @@ function newProject() {
 
 /* ─────────────────────────── EVENTOS UI ─────────────────────────────── */
 dom.newBtn.addEventListener('click', newProject);
-dom.saveBtn.addEventListener('click', saveProject);
-dom.exportBtn.addEventListener('click', exportProject);
+dom.saveBtn.addEventListener('click', () => {
+  saveProject().catch((error) => console.error('No se pudo guardar el proyecto', error));
+});
+dom.exportBtn.addEventListener('click', () => {
+  exportProject().catch((error) => console.error('No se pudo exportar el proyecto', error));
+});
 
 dom.openInput.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     try {
-      loadProject(JSON.parse(ev.target.result));
+      await loadProject(JSON.parse(ev.target.result));
     } catch {
       alert('Archivo proyecto inválido');
     } finally {
@@ -669,9 +888,17 @@ dom.openInput.addEventListener('change', (e) => {
 });
 
 /* ─────────────────────────── INICIO ─────────────────────────────────── */
-if (Object.keys(project.scenes).length) {
-  buildViewer();
-  renderSceneList();
-} else {
-  document.addEventListener('DOMContentLoaded', () => renderSceneList());
-}
+(async () => {
+  try {
+    await storageReady;
+    await ensureAllSceneMedia();
+  } catch (error) {
+    console.error('Error inicializando el almacenamiento', error);
+  }
+  if (Object.keys(project.scenes).length) {
+    buildViewer();
+    renderSceneList();
+  } else {
+    renderSceneList();
+  }
+})();
