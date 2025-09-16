@@ -363,7 +363,11 @@ function addHotspot(sceneId, hotspot) {
   scene.hotSpots ||= [];
   scene.hotSpots.push(hotspot);
   viewer.addHotSpot(hotspot, sceneId);
-  if (hotspot.div) enableDrag(hotspot.div, hotspot, sceneId);
+  if (hotspot.div) {
+    enableDrag(hotspot.div, hotspot, sceneId);
+  }
+  attachHotspotEditors();
+  if (!hotspot.div) setTimeout(attachHotspotEditors, 0);
   scheduleAutoSave();
 }
 
