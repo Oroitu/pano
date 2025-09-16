@@ -399,9 +399,8 @@ function editHotspot(hs, sceneId, event) {
         return;
       }
 
-      const previousId = hs.id;
+      viewer.removeHotSpot(hs.id, sceneId);
       Object.assign(hs, parsed);
-      viewer.removeHotSpot(previousId, sceneId);
       viewer.addHotSpot(hs, sceneId);
       attachHotspotEditors();
       scheduleAutoSave();
