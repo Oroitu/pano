@@ -361,10 +361,11 @@ function editHotspot(hs, sceneId, event) {
       return;
     }
     const targetId = hs.id;
+    viewer.removeHotSpot(targetId);
     scene.hotSpots = scene.hotSpots.filter((h) => h.id !== targetId);
-    viewer.removeHotSpot(targetId, sceneId);
-    scheduleAutoSave();
+    attachHotspotEditors();
     closeHotspotMenu();
+    scheduleAutoSave();
   };
 
   const showEditForm = () => {
