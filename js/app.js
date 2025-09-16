@@ -43,6 +43,7 @@ if (autosaved) {
 let viewer = /** @type {pannellum.Viewer | null} */ (null);
 let dblClickHandler = null;
 let autoSaveTimer = null;
+let activeHotspotMenu = null;
 function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
@@ -65,8 +66,17 @@ const dom = {
   hotspotToolbar: document.getElementById('hotspotToolbar'),
 };
 
+function closeHotspotMenu() {
+  if (!activeHotspotMenu) return;
+  document.removeEventListener('mousedown', activeHotspotMenu.onOutside);
+  document.removeEventListener('keydown', activeHotspotMenu.onKeydown);
+  activeHotspotMenu.element.remove();
+  activeHotspotMenu = null;
+}
+
 /* ─────────────────────────── VISOR PANNELLUM ───────────────────────────── */
 function buildViewer() {
+  closeHotspotMenu();
   // limpiar visor existente
   if (viewer) {
     try { viewer.destroy?.(); } catch {}
@@ -93,7 +103,10 @@ function buildViewer() {
   dom.panorama.addEventListener('dblclick', dblClickHandler);
 
   // cuando se cambie de escena volvemos a habilitar drag / editar
-  viewer.on('scenechange', attachHotspotEditors);
+  viewer.on('scenechange', () => {
+    closeHotspotMenu();
+    attachHotspotEditors();
+  });
   attachHotspotEditors(); // para la primera escena
 }
 
@@ -188,38 +201,144 @@ function handleViewerDoubleClick(e) {
   const currentSceneId = viewer.getScene();
   if (!currentSceneId) return;
 
-  const type = prompt('Tipo de hotspot:\n"link" – enlazar escena\n"info" – nota informativa', 'link');
-  if (!type) return;
+  closeHotspotMenu();
 
-  if (type.toLowerCase() === 'link') {
-    const dest = prompt('ID escena destino:\n' + Object.keys(project.scenes).join(', '));
-    if (!dest || !project.scenes[dest]) return alert('Escena destino no válida');
-    const text = prompt('Texto del enlace (opcional):', dest) || dest;
+  const menu = document.createElement('div');
+  menu.id = 'hotspotMenu';
+  const content = document.createElement('div');
+  content.className = 'hotspot-menu-content';
+  menu.appendChild(content);
 
-    addHotspot(currentSceneId, {
-      pitch,
-      yaw,
-      type: 'scene',
-      sceneId: dest,
-      text,
-      cssClass: 'link-hotspot',
+  const showMainOptions = () => {
+    content.innerHTML = '';
+    const actions = document.createElement('div');
+    actions.className = 'hotspot-menu-actions';
+
+    const linkBtn = document.createElement('button');
+    linkBtn.type = 'button';
+    linkBtn.textContent = 'Enlace';
+    linkBtn.className = 'hotspot-menu-button';
+    linkBtn.addEventListener('click', () => showLinkForm());
+
+    const infoBtn = document.createElement('button');
+    infoBtn.type = 'button';
+    infoBtn.textContent = 'Info';
+    infoBtn.className = 'hotspot-menu-button';
+    infoBtn.addEventListener('click', () => showInfoForm());
+
+    actions.append(linkBtn, infoBtn);
+    content.appendChild(actions);
+  };
+
+  const showLinkForm = () => {
+    content.innerHTML = '';
+    const form = document.createElement('div');
+    form.className = 'hotspot-menu-form';
+
+    const select = document.createElement('select');
+    select.className = 'hotspot-menu-select';
+    select.innerHTML =
+      '<option value="">Escena destino…</option>' +
+      Object.entries(project.scenes)
+        .map(([id, scene]) => `<option value="${id}">${scene.title || id}</option>`)
+        .join('');
+    form.appendChild(select);
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = 'Confirmar';
+    confirmBtn.className = 'hotspot-menu-button hotspot-menu-confirm';
+    confirmBtn.addEventListener('click', () => {
+      const dest = select.value;
+      if (!dest) {
+        select.focus();
+        return;
+      }
+      const destScene = project.scenes[dest];
+      if (!destScene) {
+        alert('Escena destino no válida');
+        return;
+      }
+      const text = destScene.title || dest;
+      addHotspot(currentSceneId, {
+        pitch,
+        yaw,
+        type: 'scene',
+        sceneId: dest,
+        text,
+        cssClass: 'link-hotspot',
+      });
+      closeHotspotMenu();
     });
-  } else if (type.toLowerCase() === 'info') {
-    const infoText = prompt('Texto informativo:');
-    if (!infoText) return;
-    addHotspot(currentSceneId, {
-      pitch,
-      yaw,
-      type: 'info',
-      text: infoText,
-      cssClass: 'info-hotspot',
-      createTooltipFunc: (div, { text }) => {
-        div.classList.add('info-hotspot');
-        div.innerHTML = `<span class="px-2 py-1 bg-black/70 rounded text-xs">${text}</span>`;
-      },
-      createTooltipArgs: { text: infoText },
+
+    form.appendChild(confirmBtn);
+    content.appendChild(form);
+    select.focus();
+  };
+
+  const showInfoForm = () => {
+    content.innerHTML = '';
+    const form = document.createElement('div');
+    form.className = 'hotspot-menu-form';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'hotspot-menu-text';
+    textarea.placeholder = 'Texto informativo…';
+    form.appendChild(textarea);
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = 'Confirmar';
+    confirmBtn.className = 'hotspot-menu-button hotspot-menu-confirm';
+    confirmBtn.addEventListener('click', () => {
+      const infoText = textarea.value.trim();
+      if (!infoText) {
+        textarea.focus();
+        return;
+      }
+      addHotspot(currentSceneId, {
+        pitch,
+        yaw,
+        type: 'info',
+        text: infoText,
+        cssClass: 'info-hotspot',
+        createTooltipFunc: (div, { text }) => {
+          div.classList.add('info-hotspot');
+          div.innerHTML = `<span class="px-2 py-1 bg-black/70 rounded text-xs">${text}</span>`;
+        },
+        createTooltipArgs: { text: infoText },
+      });
+      closeHotspotMenu();
     });
-  }
+
+    form.appendChild(confirmBtn);
+    content.appendChild(form);
+    textarea.focus();
+  };
+
+  showMainOptions();
+  dom.panorama.appendChild(menu);
+
+  const rect = dom.panorama.getBoundingClientRect();
+  let left = e.clientX - rect.left;
+  let top = e.clientY - rect.top;
+  const maxLeft = Math.max(0, rect.width - menu.offsetWidth);
+  const maxTop = Math.max(0, rect.height - menu.offsetHeight);
+  left = Math.min(Math.max(left, 0), maxLeft);
+  top = Math.min(Math.max(top, 0), maxTop);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
+  const onOutside = (event) => {
+    if (!menu.contains(event.target)) closeHotspotMenu();
+  };
+  const onKeydown = (event) => {
+    if (event.key === 'Escape') closeHotspotMenu();
+  };
+
+  activeHotspotMenu = { element: menu, onOutside, onKeydown };
+  document.addEventListener('mousedown', onOutside);
+  document.addEventListener('keydown', onKeydown);
 }
 
 /* ─────────────────────────── HOTSPOT TOOLBAR ──────────────────────────── */
