@@ -984,8 +984,13 @@ async function exportProject () {
 
   // ─────────── 1. index.html (visor) ─────────
   // Copiamos el visor autónomo desde /deploy/
-  const indexHtml = await fetch('deploy/index.html').then(r => r.text());
+  const [indexHtml, viewerCss] = await Promise.all([
+    fetch('deploy/index.html').then(r => r.text()),
+    fetch('deploy/viewer.css').then(r => r.text()),
+  ]);
+
   zip.file('index.html', indexHtml);
+  zip.file('viewer.css', viewerCss);
 
   // ─────────── 2. tour.json ──────────────────
   const tourScenes = {};
