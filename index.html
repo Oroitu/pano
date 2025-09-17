@@ -14,7 +14,7 @@
     <!-- ───────────────────────── TOP BAR ────────────────────────── -->
     <header
       id="top-bar"
-      class="flex items-center justify-between px-4 py-2 shadow-md bg-gray-800/90 backdrop-blur"
+      class="flex flex-wrap items-center justify-between gap-4 px-4 py-2 shadow-md bg-gray-800/90 backdrop-blur"
     >
       <div class="flex items-center gap-2">
         <h1 class="font-semibold text-lg select-none">
@@ -22,13 +22,27 @@
         </h1>
       </div>
 
-      <nav class="flex items-center gap-2 text-sm font-medium">
-        <button id="newProjectBtn" class="btn">Nuevo</button>
-        <button id="openProjectBtn" class="btn">Abrir</button>
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <nav class="flex flex-wrap items-center gap-2 text-sm font-medium">
+          <button id="newProjectBtn" class="btn">Nuevo</button>
+          <button id="openProjectBtn" class="btn">Abrir</button>
 
-        <button id="saveProjectBtn" class="btn">Guardar</button>
-        <button id="exportProjectBtn" class="btn">Exportar</button>
-      </nav>
+          <button id="saveProjectBtn" class="btn">Guardar</button>
+          <button id="exportProjectBtn" class="btn">Exportar</button>
+        </nav>
+
+        <div id="hotspotToolbar" class="flex flex-wrap items-center gap-2">
+          <button id="addLinkBtn" class="btn icon-link">Añadir enlace</button>
+          <button id="addInfoBtn" class="btn icon-info">Añadir info</button>
+          <div class="edit-toggle">
+            <span class="text-xs">Editar</span>
+            <label class="switch">
+              <input type="checkbox" id="hotspotEditToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
     </header>
 
     <!-- ───────────────────────── MAIN LAYOUT ────────────────────── -->
@@ -47,18 +61,6 @@
 
       <!-- Contenedor Pannellum -->
       <section id="panorama" class="flex-1 relative"></section>
-
-      <div id="hotspotToolbar">
-        <button id="addLinkBtn" class="btn icon-link">Añadir enlace</button>
-        <button id="addInfoBtn" class="btn icon-info">Añadir info</button>
-        <div class="edit-toggle">
-          <span class="text-xs">Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="hotspotEditToggle" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
     </main>
 
     <!-- Dialogs / modals se inyectarán aquí mediante JS -->
