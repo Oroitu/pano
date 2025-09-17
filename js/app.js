@@ -205,7 +205,8 @@ async function blobToDataURL(blob) {
 const dom = {
   panorama: /** @type {HTMLDivElement} */ (document.getElementById('panorama')),
   sceneList: /** @type {HTMLDivElement} */ (document.getElementById('sceneList')),
-  addSceneInput: /** @type {HTMLInputElement} */ (document.getElementById('addSceneInput')),
+  sceneListItems: /** @type {HTMLDivElement} */ (document.getElementById('sceneListItems')),
+  addSceneBtn: document.getElementById('addSceneBtn'),
   newBtn:      document.getElementById('newProjectBtn'),
   openBtn:     document.getElementById('openProjectBtn'),
   saveBtn:     document.getElementById('saveProjectBtn'),
@@ -716,10 +717,12 @@ dom.addInfoBtn.addEventListener('click', () => {
 
 /* ─────────────────────────── LISTA DE ESCENAS / DRAG & DROP ────────────── */
 function renderSceneList() {
-  dom.sceneList.innerHTML = '';
+  if (!dom.sceneListItems) return;
+  dom.sceneListItems.innerHTML = '';
   const scenes = Object.entries(project.scenes);
   if (scenes.length === 0) {
-    dom.sceneList.innerHTML = '<p class="p-4 text-sm text-gray-400">Sin escenas aún. Arrastra aquí imágenes 360°.</p>';
+    dom.sceneListItems.innerHTML =
+      '<div class="empty-message">Sin escenas aún. Usa «Añadir escena» o arrastra aquí imágenes 360°.</div>';
     return;
   }
   scenes.forEach(([id, scene]) => {
@@ -781,8 +784,80 @@ function renderSceneList() {
     });
     row.appendChild(delBtn);
 
-    dom.sceneList.appendChild(row);
+    dom.sceneListItems.appendChild(row);
   });
+}
+
+function promptSceneFiles() {
+  if (typeof window.showOpenFilePicker === 'function') {
+    window
+      .showOpenFilePicker({
+        multiple: true,
+        types: [
+          {
+            description: 'Imágenes 360°',
+            accept: {
+              'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.avif'],
+            },
+          },
+        ],
+      })
+      .then((handles) => {
+        handles.forEach((handle) => {
+          handle
+            .getFile()
+            .then((file) => {
+              if (!file.type.startsWith('image/')) return;
+              createSceneFromFile(file).catch((error) =>
+                console.error('No se pudo crear la escena', error)
+              );
+            })
+            .catch((error) => {
+              console.error('No se pudo obtener el archivo seleccionado', error);
+            });
+        });
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return;
+        console.error('No se pudieron seleccionar imágenes', error);
+      });
+    return;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    input.remove();
+    window.removeEventListener('focus', onWindowFocus);
+  };
+
+  const handleFiles = () => {
+    const files = [...(input.files || [])].filter((f) => f.type.startsWith('image/'));
+    files.forEach((file) => {
+      createSceneFromFile(file).catch((error) => console.error('No se pudo crear la escena', error));
+    });
+    cleanup();
+  };
+
+  const onWindowFocus = () => {
+    setTimeout(() => {
+      if (!input.files || input.files.length === 0) {
+        cleanup();
+      }
+    }, 0);
+  };
+
+  input.addEventListener('change', handleFiles, { once: true });
+  window.addEventListener('focus', onWindowFocus, { once: true });
+  input.click();
 }
 
 // drag imágenes → crear escena
@@ -806,16 +881,11 @@ dom.sceneList.addEventListener('drop', (e) => {
   });
 });
 
-dom.sceneList.addEventListener('dblclick', () => dom.addSceneInput.click());
-
-dom.addSceneInput.addEventListener('change', (e) => {
-  const input = /** @type {HTMLInputElement} */ (e.target);
-  const files = [...input.files].filter((f) => f.type.startsWith('image/'));
-  files.forEach((file) => {
-    createSceneFromFile(file).catch((error) => console.error('No se pudo crear la escena', error));
+if (dom.addSceneBtn) {
+  dom.addSceneBtn.addEventListener('click', () => {
+    promptSceneFiles();
   });
-  input.value = '';
-});
+}
 
 async function createSceneFromFile(file) {
   await storageReady;

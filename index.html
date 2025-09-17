@@ -37,9 +37,13 @@
       <aside
         id="sceneList"
         class="w-64 max-w-[50vw] overflow-y-auto border-r border-gray-700 bg-gray-850/80 backdrop-blur-lg hidden md:block"
-      ></aside>
-
-      <input type="file" id="addSceneInput" accept="image/*" multiple class="hidden">
+      >
+        <div class="scene-list-header">
+          <button id="addSceneBtn" class="btn add-scene-btn">Añadir escena</button>
+          <div class="scene-drop-hint">Arrastra imágenes 360° o usa el botón.</div>
+        </div>
+        <div id="sceneListItems" class="scene-list-items"></div>
+      </aside>
 
       <!-- Contenedor Pannellum -->
       <section id="panorama" class="flex-1 relative"></section>
