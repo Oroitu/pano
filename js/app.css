@@ -110,6 +110,12 @@ html, body {
   padding: 0.5rem;
   border-radius: 0.375rem;
 }
+#sceneList .scene-item.active .scene-load,
+#sceneList .scene-load.active {
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid var(--c-primary);
+  color: #fff;
+}
 #sceneList .scene-load:hover,
 #sceneList .scene-load:focus {
   background: #374151; /* gray-700 */

@@ -721,6 +721,7 @@ function renderSceneList() {
   if (!dom.sceneListItems) return;
   dom.sceneListItems.innerHTML = '';
   const scenes = Object.entries(project.scenes);
+  const activeSceneId = typeof viewer?.getScene === 'function' ? viewer.getScene() : null;
   if (scenes.length === 0) {
     dom.sceneListItems.innerHTML =
       '<div class="empty-message">Sin escenas aún. Usa «Añadir escena» o arrastra aquí imágenes 360°.</div>';
@@ -733,6 +734,10 @@ function renderSceneList() {
     const btn = document.createElement('button');
     btn.className = 'scene-load flex items-center gap-2 w-full text-left px-3 py-2 hover:bg-gray-700 focus:bg-gray-700';
     btn.dataset.sceneId = id;
+    if (id === activeSceneId) {
+      btn.classList.add('active');
+      row.classList.add('active');
+    }
 
     const media = sceneMedia.get(id);
     if (media?.thumbUrl) {
