@@ -984,13 +984,15 @@ async function exportProject () {
 
   // ─────────── 1. index.html (visor) ─────────
   // Copiamos el visor autónomo desde /deploy/
-  const [indexHtml, viewerCss] = await Promise.all([
+  const [indexHtml, viewerCss, viewerJs] = await Promise.all([
     fetch('deploy/index.html').then(r => r.text()),
     fetch('deploy/viewer.css').then(r => r.text()),
+    fetch('deploy/viewer.js').then(r => r.text()),
   ]);
 
   zip.file('index.html', indexHtml);
   zip.file('viewer.css', viewerCss);
+  zip.file('viewer.js', viewerJs);
 
   const libsFolder = zip.folder('libs');
   if (!libsFolder) {
