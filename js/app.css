@@ -157,6 +157,11 @@ html, body {
   min-height: 320px;
 }
 
+#panorama .pnlm-panorama-info,
+#pano .pnlm-panorama-info {
+  display: none !important;
+}
+
 /* --------- Ring utility (for dragover highlight) --------- */
 .ring {
   outline: 2px solid var(--ring-color);

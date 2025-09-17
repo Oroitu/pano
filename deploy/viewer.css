@@ -24,3 +24,7 @@
   display: none !important;
   visibility: hidden !important;
 }
+
+#pano .pnlm-panorama-info {
+  display: none !important;
+}
