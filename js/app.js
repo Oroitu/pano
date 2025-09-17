@@ -992,6 +992,31 @@ async function exportProject () {
   zip.file('index.html', indexHtml);
   zip.file('viewer.css', viewerCss);
 
+  const libsFolder = zip.folder('libs');
+  if (!libsFolder) {
+    throw new Error('No se pudo crear la carpeta "libs" en el ZIP');
+  }
+
+  const libsToCopy = [
+    { source: 'libs/pannellum.css', target: 'pannellum.css' },
+    { source: 'libs/pannellum.js', target: 'pannellum.js' },
+  ];
+
+  await Promise.all(
+    libsToCopy.map(async ({ source, target }) => {
+      try {
+        const response = await fetch(source);
+        if (!response.ok) {
+          throw new Error(`Respuesta ${response.status} al obtener ${source}`);
+        }
+        const buffer = await response.arrayBuffer();
+        libsFolder.file(target, buffer);
+      } catch (error) {
+        console.error(`No se pudo copiar la librería ${source} al ZIP`, error);
+      }
+    })
+  );
+
   // ─────────── 2. tour.json ──────────────────
   const tourScenes = {};
   Object.entries(project.scenes).forEach(([id, scene]) => {
