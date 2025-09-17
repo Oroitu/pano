@@ -1,0 +1,45 @@
+{
+  "name": "Tour de prueba",
+  "meta": {
+    "author": "Equipo QA"
+  },
+  "startScene": "sala",
+  "scenes": {
+    "sala": {
+      "title": "Sala principal",
+      "type": "equirectangular",
+      "hfov": 110,
+      "pitch": 0,
+      "yaw": 180,
+      "panorama": "https://pannellum.org/images/bma-1.jpg",
+      "thumbUrl": "https://pannellum.org/images/bma-1.jpg",
+      "hotSpots": [
+        {
+          "pitch": 2,
+          "yaw": 120,
+          "type": "scene",
+          "sceneId": "terraza",
+          "text": "Ir a la terraza"
+        }
+      ]
+    },
+    "terraza": {
+      "title": "Terraza",
+      "type": "equirectangular",
+      "hfov": 110,
+      "pitch": -3,
+      "yaw": 90,
+      "panorama": "https://pannellum.org/images/alma.jpg",
+      "thumbUrl": "https://pannellum.org/images/alma.jpg",
+      "hotSpots": [
+        {
+          "pitch": 3,
+          "yaw": -40,
+          "type": "scene",
+          "sceneId": "sala",
+          "text": "Volver a la sala"
+        }
+      ]
+    }
+  }
+}
