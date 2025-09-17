@@ -21,7 +21,7 @@ const dom = {
   roomLabel: /** @type {HTMLSpanElement} */ (document.getElementById('roomLabel')),
   zoomIn: /** @type {HTMLButtonElement} */ (document.getElementById('zoomIn')),
   zoomOut: /** @type {HTMLButtonElement} */ (document.getElementById('zoomOut')),
-  fullscreen: /** @type {HTMLButtonElement} */ (document.getElementById('btnFS')),
+  fullscreen: /** @type {HTMLButtonElement | null} */ (document.getElementById('btnFS')),
 };
 
 const sceneButtons = new Map();
