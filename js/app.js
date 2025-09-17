@@ -293,6 +293,7 @@ function buildViewer() {
   viewer.on('scenechange', () => {
     closeHotspotMenu();
     dom.hotspotEditToggle.checked = false;
+    renderSceneList();
   });
   if (dom.hotspotEditToggle.checked) attachHotspotEditors();
 }
@@ -750,6 +751,28 @@ function renderSceneList() {
     btn.addEventListener('dblclick', load);
 
     row.appendChild(btn);
+
+    const saveViewBtn = document.createElement('button');
+    saveViewBtn.className = 'scene-action save-view';
+    saveViewBtn.textContent = '💾';
+    saveViewBtn.title = 'Guardar orientación actual de la escena';
+    const isActiveScene = viewer?.getScene && viewer.getScene() === id;
+    if (!isActiveScene) saveViewBtn.disabled = true;
+    saveViewBtn.addEventListener('click', () => {
+      if (!viewer || viewer.getScene() !== id) return;
+      const scene = project.scenes[id];
+      if (!scene) return;
+      const pitch = viewer.getPitch();
+      const yaw = viewer.getYaw();
+      const hfov = viewer.getHfov();
+      scene.pitch = pitch;
+      scene.yaw = yaw;
+      scene.hfov = hfov;
+      scheduleAutoSave();
+      viewer.loadScene(id, scene.pitch, scene.yaw, scene.hfov);
+      renderSceneList();
+    });
+    row.appendChild(saveViewBtn);
 
     const startBtn = document.createElement('button');
     startBtn.className = 'scene-action start';
