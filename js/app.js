@@ -746,7 +746,12 @@ function renderSceneList() {
     span.textContent = scene.title || id;
     btn.appendChild(span);
 
-    const load = () => viewer?.loadScene(id);
+    const load = () => {
+      if (!viewer) return;
+      const sceneData = project.scenes[id] || {};
+      const { pitch = 0, yaw = 0, hfov = 110 } = sceneData;
+      viewer.loadScene(id, pitch, yaw, hfov);
+    };
     btn.addEventListener('click', load);
     btn.addEventListener('dblclick', load);
 
@@ -768,6 +773,12 @@ function renderSceneList() {
       scene.pitch = pitch;
       scene.yaw = yaw;
       scene.hfov = hfov;
+      const config = viewer.getConfig();
+      if (config?.scenes?.[id]) {
+        config.scenes[id].pitch = pitch;
+        config.scenes[id].yaw = yaw;
+        config.scenes[id].hfov = hfov;
+      }
       scheduleAutoSave();
       viewer.loadScene(id, scene.pitch, scene.yaw, scene.hfov);
       renderSceneList();
