@@ -28,3 +28,5 @@
 #pano .pnlm-panorama-info {
   display: none !important;
 }
+
+.pnlm-lmsg { display: none !important; }
