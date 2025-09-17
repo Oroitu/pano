@@ -17,3 +17,10 @@
 .info-hotspot span {
   white-space: nowrap;
 }
+
+/* Hide default Pannellum controls and author box */
+.pnlm-controls-container,
+.pnlm-author-box {
+  display: none !important;
+  visibility: hidden !important;
+}
