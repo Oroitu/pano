@@ -927,6 +927,7 @@ async function saveProject() {
   for (const [id, scene] of Object.entries(project.scenes)) {
     const exportScene = { ...scene, type: 'equirectangular' };
     let dataUrl = null;
+    let conversionFailed = false;
     try {
       const blob = await getImage(id);
       if (blob) dataUrl = await blobToDataURL(blob);
@@ -934,11 +935,56 @@ async function saveProject() {
       console.error(`No se pudo obtener la imagen ${id} para guardar`, error);
     }
     const media = sceneMedia.get(id);
+    if (!dataUrl) {
+      try {
+        let blob = null;
+        if (media?.objectUrl && media.isObjectUrl !== false) {
+          const response = await fetch(media.objectUrl);
+          if (!response.ok) {
+            throw new Error(`Respuesta ${response.status} al recuperar la imagen ${id}`);
+          }
+          blob = await response.blob();
+        } else {
+          const dataCandidates = [scene?.panoramaData, scene?.panorama];
+          for (const candidate of dataCandidates) {
+            if (typeof candidate === 'string' && candidate.startsWith('data:')) {
+              blob = await dataURLToBlob(candidate);
+              if (blob) break;
+            }
+          }
+        }
+        if (blob) {
+          dataUrl = await blobToDataURL(blob);
+        }
+      } catch (error) {
+        conversionFailed = true;
+        console.error(`No se pudo convertir la imagen ${id} durante el guardado`, error);
+      }
+    }
     if (dataUrl) {
       exportScene.panorama = dataUrl;
       exportScene.panoramaData = dataUrl;
-    } else if (media?.objectUrl && media.isObjectUrl === false) {
-      exportScene.panorama = media.objectUrl;
+    } else {
+      let fallbackPanorama = null;
+      if (media?.objectUrl && media.isObjectUrl === false) {
+        fallbackPanorama = media.objectUrl;
+      } else if (typeof scene?.panorama === 'string') {
+        fallbackPanorama = scene.panorama;
+      }
+      if (fallbackPanorama) {
+        exportScene.panorama = fallbackPanorama;
+        if (fallbackPanorama.startsWith?.('data:')) {
+          exportScene.panoramaData = fallbackPanorama;
+        }
+      }
+    }
+    if (!exportScene.panorama) {
+      console.error(`No se pudo incluir la imagen de la escena "${scene?.title || id}" en el guardado.`);
+      if (conversionFailed) {
+        console.error('La conversión de la imagen falló y no existe una URL remota disponible.');
+      }
+      alert(`No se pudo guardar el proyecto porque la escena "${scene?.title || id}" no tiene una imagen disponible.\nIntenta recargar la página y vuelve a intentarlo.`);
+      return;
     }
     if (media?.thumbUrl) exportScene.thumbUrl = media.thumbUrl;
     scenes[id] = exportScene;
